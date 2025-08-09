@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+data
+data/
+notebooks
+output
+input
+cmi-detect-behavior-with-sensor-dat*
+cmi-detect-behavior-with-sensor-data.zip
+*.zipcmi-detect-behavior-with-sensor-data.zip
