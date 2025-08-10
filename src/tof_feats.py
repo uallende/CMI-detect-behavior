@@ -8,7 +8,7 @@ import gc # Import gc for memory management
 # --- Configuration ---
 RAW_DIR = Path("input/cmi-detect-behavior-with-sensor-data")
 # RAW_DIR = Path("/kaggle/input/cmi-detect-behavior-with-sensor-data")
-EXPORT_DIR = Path("./")
+EXPORT_DIR = Path("data")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True) # Ensure export directory exists
 
 def remove_gravity_from_acc(acc_data, rot_data):
@@ -59,13 +59,12 @@ def calculate_angular_distance(rot_data):
 
 if __name__ == "__main__":
 
-    print("▶ TRAIN MODE – loading dataset …")
     df = pd.read_csv(RAW_DIR / "train.csv")
     train_dem_df = pd.read_csv(RAW_DIR / "train_demographics.csv")
     df = pd.merge(df, train_dem_df, on='subject', how='left')
     le = LabelEncoder()
     df['gesture_int'] = le.fit_transform(df['gesture'])
-    np.save(EXPORT_DIR / "gesture_classes.npy", le.classes_)
+    # np.save(EXPORT_DIR / "gesture_classes.npy", le.classes_)
 
     print("  Removing gravity and calculating linear acceleration features...")
     linear_accel_list = [pd.DataFrame(remove_gravity_from_acc(group[['acc_x', 'acc_y', 'acc_z']], group[['rot_x', 'rot_y', 'rot_z', 'rot_w']]), columns=['linear_acc_x', 'linear_acc_y', 'linear_acc_z'], index=group.index) for _, group in df.groupby('sequence_id')]
@@ -91,7 +90,7 @@ if __name__ == "__main__":
     metadata_cols = ['sequence_id', 'subject', 'gesture', 'gesture_int']
 
     print(f"  Total {len(final_feature_cols)} features will be engineered.")
-    np.save(EXPORT_DIR / "feature_cols.npy", np.array(final_feature_cols))
+    # np.save(EXPORT_DIR / "feature_cols.npy", np.array(final_feature_cols))
 
     # --- MODIFICATION START: Build a list of processed DataFrames ---
     print("  Building list of processed sequences...")
@@ -130,7 +129,7 @@ if __name__ == "__main__":
     print(final_df.head())
 
     # Save the final DataFrame to a memory-efficient Parquet file
-    output_path = EXPORT_DIR / "final_processed_train_data.parquet"
+    output_path = EXPORT_DIR / "tof_kaggle_feats.parquet"
     print(f"\nSaving final DataFrame to '{output_path}'...")
     final_df.to_parquet(output_path)
     print("Save complete.")

@@ -68,22 +68,6 @@ def perform_target_encoding(train_df, val_df, target=TARGET):
 
     return train_df, val_df, le
 
-# def create_sequence_dataset(df, cols, target_col='gesture'):
-
-#     X, y, lengths = [], [], []
-
-#     for _, seq in df.group_by('sequence_id'):
-#         data = seq[cols].to_numpy().astype(np.float32)
-#         label = seq[target_col].max()
-
-#         X.append(data)
-#         y.append(label)
-#         lengths.append(len(data))
-
-#     y = np.array(y, dtype=np.int16)
-
-#     return X, y
-
 def create_sequence_dataset(df: pl.DataFrame, feature_cols: list, gate_df: pl.DataFrame):
     """
     Creates sequences from the DataFrame and aligns them with their labels and TOF gate targets.
@@ -205,3 +189,21 @@ def train_model(
 
 if __name__ == "__main__":
     print("done")    
+
+
+
+# def create_sequence_dataset(df, cols, target_col='gesture'):
+
+#     X, y, lengths = [], [], []
+
+#     for _, seq in df.group_by('sequence_id'):
+#         data = seq[cols].to_numpy().astype(np.float32)
+#         label = seq[target_col].max()
+
+#         X.append(data)
+#         y.append(label)
+#         lengths.append(len(data))
+
+#     y = np.array(y, dtype=np.int16)
+
+#     return X, y    

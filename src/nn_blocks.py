@@ -70,15 +70,25 @@ def wave_block(x, filters, kernel_size, n, dropout_rate=0.3):
 
     return res_x
 
-def match_time_steps(x, skip):
-    def crop_or_pad(inputs):
-        x, skip = inputs
-        x_len = shape(x)[1]
-        skip_len = shape(skip)[1]
-        min_len = minimum(x_len, skip_len)
-        return x[:, :min_len, :], skip[:, :min_len, :]
-    
-    x, skip = Lambda(crop_or_pad)([x, skip])
+def crop_or_pad(inputs):
+    x, skip = inputs
+    x_len = shape(x)[1]
+    skip_len = shape(skip)[1]
+    min_len = minimum(x_len, skip_len)
+    return x[:, :min_len, :], skip[:, :min_len, :]
+
+def crop_or_pad_output_shape(input_shapes):
+    shape1, shape2 = input_shapes
+    min_time_steps = min(shape1[1], shape2[1])
+    num_features = shape1[2]
+    output_shape = (None, min_time_steps, num_features)
+    return [output_shape, output_shape]
+
+def match_time_steps(x, skip):    
+    x, skip = Lambda(
+        crop_or_pad, 
+        output_shape=crop_or_pad_output_shape 
+    )([x, skip])
     return x, skip
 
 def se_block(x, reduction=8):
