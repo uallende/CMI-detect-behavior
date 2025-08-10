@@ -5,8 +5,6 @@ from scipy.spatial.transform import Rotation as R
 from pathlib import Path
 from src.constants import return_data_path
 
-# --- Helper Functions (No changes needed here) ---
-
 def remove_gravity_polars(acc_df: pl.DataFrame, rot_df: pl.DataFrame) -> np.ndarray:
     """Removes the gravity component from accelerometer data using quaternion rotations."""
     acc_values = acc_df.select(['acc_x', 'acc_y', 'acc_z']).to_numpy()
@@ -68,8 +66,6 @@ def calculate_gravity_orientation(rot_df: pl.DataFrame) -> np.ndarray:
             continue
     return orientation_angles
 
-# --- Main Feature Engineering Function (No changes needed here) ---
-
 def add_all_imu_features_polars(df: pl.DataFrame, sampling_rate_hz: int) -> pl.DataFrame:
     """Main function to add all IMU features to the DataFrame."""
     df = df.sort(["sequence_id", "sequence_counter"])
@@ -126,8 +122,8 @@ def add_all_imu_features_polars(df: pl.DataFrame, sampling_rate_hz: int) -> pl.D
 if __name__ == "__main__":
     # --- Configuration ---
     TRAIN_FILE = Path('input/cmi-detect-behavior-with-sensor-data/train.csv')
-    OUTPUT_DIR = Path("output")
-    OUTPUT_FILE = OUTPUT_DIR / "phisycs_feats.parquet"
+    EXPORT_DIR = Path("output")
+    OUTPUT_FILE = EXPORT_DIR / "phisycs_feats.parquet"
     SAMPLING_RATE_HZ = 200
 
     # --- Load Data ---
@@ -155,6 +151,6 @@ if __name__ == "__main__":
                 )
 
         processed_df = add_all_imu_features_polars(df, SAMPLING_RATE_HZ)
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        os.makedirs(EXPORT_DIR, exist_ok=True)
         processed_df.write_parquet(OUTPUT_FILE)
         print(f"Save complete")

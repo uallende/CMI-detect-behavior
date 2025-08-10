@@ -34,6 +34,11 @@ def create_model_definition(dataset, imu_dim, wd=1e-4):
 Per-fold Accuracies: [0.7546614327772326, 0.7507360157016683, 0.767909715407262, 0.7741777123220422]
 Mean Accuracy: 0.7619 ± 0.0095
 
+In Kaggle
+=== Cross-validation Summary ===
+Per-fold Accuracies: [0.7419038272816487, 0.7708537782139352, 0.7737978410206084, 0.7947962690230731]
+Mean Accuracy: 0.7703 ± 0.0188
+
 
 
 

@@ -1,79 +1,89 @@
 import polars as pl
 from pathlib import Path
 import gc
+import numpy as np
 
-# --- Configuration ---
+# =====================================================================================
+# CONFIGURATION
+# =====================================================================================
+# --- Input Paths ---
+# Assumes your feature scripts save to the 'output' directory
 FEATURE_DIR = Path("output")
-IMU_FEATURES_FILE = FEATURE_DIR / "full_features_df.parquet" 
-TOF_FEATURES_FILE = FEATURE_DIR / "tof_features_advanced_train.parquet"
-FINAL_DATASET_FILE = FEATURE_DIR / "final_model_input_train.parquet"
 
-# --- Main Merging Logic ---
+IMU_FEATURES_FILE = FEATURE_DIR / "imu_features_plus_raw_others.parquet" 
+TOF_FEATURES_FILE = FEATURE_DIR / "tof_features_advanced_train_polars.parquet"
+FINAL_DATASET_FILE = FEATURE_DIR / "final_model_input_dataset.parquet"
 
-print("▶ Loading pre-computed feature sets...")
+# =====================================================================================
+# MAIN MERGING LOGIC
+# =====================================================================================
+if __name__ == "__main__":
+    print("▶ Starting Feature Merging Script...")
 
-# 1. Load the IMU features DataFrame
-# This file contains all original columns plus the new IMU features.
-print(f"Loading IMU features from '{IMU_FEATURES_FILE}'...")
-imu_df = pl.read_parquet(IMU_FEATURES_FILE)
-print("IMU features loaded.")
+    # --- Step 1: Load Both Feature Sets ---
+    print(f"  Loading IMU features from: {IMU_FEATURES_FILE}")
+    df_imu = pl.read_parquet(IMU_FEATURES_FILE)
+    
+    print(f"  Loading ToF features from: {TOF_FEATURES_FILE}")
+    df_tof = pl.read_parquet(TOF_FEATURES_FILE)
 
-# 2. Load the advanced ToF features DataFrame
-# This file contains metadata and the new ToF features.
-print(f"Loading ToF features from '{TOF_FEATURES_FILE}'...")
-tof_df = pl.read_parquet(TOF_FEATURES_FILE)
-print("ToF features loaded.")
+    print("\nInitial DataFrame Shapes:")
+    print(f"  IMU DataFrame: {df_imu.shape}")
+    print(f"  ToF DataFrame: {df_tof.shape}")
 
-# --- Identify columns for the merge ---
-# The ToF dataframe has the metadata and the ToF features.
-# We need to get ONLY the new IMU features from the imu_df to avoid duplicating columns.
-tof_cols = [c for c in tof_df.columns if c.startswith('tof_')]
-imu_feature_cols = [
-    'acc_mag', 'acc_mag_jerk', 'linear_acc_x', 'linear_acc_y', 'linear_acc_z',
-    'angular_vel_x', 'angular_vel_y', 'angular_vel_z', 'angular_accel_x',
-    'angular_accel_y', 'angular_accel_z', 'grav_orient_x', 'grav_orient_y',
-    'grav_orient_z', 'linear_acc_mag', 'angular_vel_mag', 'angular_accel_mag',
-    'linear_acc_mag_jerk', 'angular_vel_mag_jerk', 'angular_accel_mag_jerk'
-]
-# Also keep the original IMU columns if you need them
-original_imu_cols = ['acc_x', 'acc_y', 'acc_z', 'rot_x', 'rot_y', 'rot_z', 'rot_w']
+    # --- Step 2: Select the Columns to Keep from Each DataFrame ---
+    
+    tof_feature_cols = np.load(FEATURE_DIR / "tof_feature_cols_advanced.npy", allow_pickle=True).tolist()
+    metadata_cols = ['sequence_id', 'sequence_counter', 'subject', 'gesture', 'gesture_int']
+    
+    # Ensure sequence_counter is present for a robust join
+    if 'sequence_counter' not in df_tof.columns:
+        df_tof = df_tof.with_columns(pl.int_range(0, pl.count()).over('sequence_id').alias('sequence_counter'))
+        
+    df_tof_selected = df_tof.select(metadata_cols + tof_feature_cols)
 
-# Define the key columns for joining
-key_cols = ['sequence_id', 'sequence_counter']
+    # From the IMU DataFrame, we ONLY want the new, engineered physics features and the keys.
+    key_cols = ['sequence_id', 'sequence_counter']
+    imu_engineered_cols = [
+        'acc_mag', 'acc_mag_jerk', 'linear_acc_x', 'linear_acc_y', 'linear_acc_z',
+        'angular_vel_x', 'angular_vel_y', 'angular_vel_z', 'angular_accel_x',
+        'angular_accel_y', 'angular_accel_z', 'grav_orient_x', 'grav_orient_y',
+        'grav_orient_z', 'linear_acc_mag', 'angular_vel_mag', 'angular_accel_mag',
+        'linear_acc_mag_jerk', 'angular_vel_mag_jerk', 'angular_accel_mag_jerk'
+    ]
+    
+    # Select only the columns we need to join
+    df_imu_selected = df_imu.select(key_cols + imu_engineered_cols)
 
-# Select only the keys and the desired feature columns from the IMU dataframe
-imu_features_to_join = imu_df.select(key_cols + original_imu_cols + imu_feature_cols)
+    print("\nDataFrame Shapes After Column Selection:")
+    print(f"  Selected IMU DataFrame: {df_imu_selected.shape}")
+    print(f"  Selected ToF DataFrame: {df_tof_selected.shape}")
 
+    # --- Step 3: Merge the Two DataFrames ---
+    print("\n  Merging the two feature sets on 'sequence_id' and 'sequence_counter'...")
+    
+    # Use an inner join to ensure perfect alignment
+    final_df = df_tof_selected.join(
+        df_imu_selected,
+        on=key_cols,
+        how='inner'
+    )
+    
+    gc.collect()
+    print("  Merge complete.")
 
-print("\nVerifying shapes before merge:")
-print(f"IMU features to join shape: {imu_features_to_join.shape}")
-print(f"ToF DataFrame shape:        {tof_df.shape}")
+    # --- Step 4: Verification and Saving ---
+    print("\n--- Final Combined DataFrame ---")
+    print(f"  Shape: {final_df.shape}")
+    print("  Head:")
+    print(final_df.head())
 
-# --- The Merge Operation ---
-# We use an 'inner' merge on both sequence_id and sequence_counter.
-# This ensures we only keep rows that exist in both datasets and are perfectly aligned.
-# The `tof_df` has the primary metadata, so we use it as the "left" DataFrame.
-print("\nMerging the two feature sets...")
-final_df = tof_df.join(
-    imu_features_to_join, 
-    on=key_cols,
-    how='inner'
-)
-gc.collect()
+    # Verify column count
+    expected_cols = len(df_tof_selected.columns) + len(df_imu_selected.columns) - len(key_cols)
+    print(f"\n  Expected column count: {expected_cols}. Actual: {len(final_df.columns)}")
+    if len(final_df.columns) != expected_cols:
+        print("  WARNING: Column count mismatch. Check for duplicate column names.")
 
-print("Merge complete.")
-
-# --- Verification and Saving ---
-print("\nFinal Combined DataFrame Info:")
-final_df.info(verbose=False, show_counts=True)
-
-print(f"\nFinal Combined DataFrame shape: {final_df.shape}")
-print("\nFinal Combined DataFrame Head:")
-print(final_df.head())
-
-expected_cols = len(tof_df.columns) + len(imu_features_to_join.columns) - len(key_cols)
-print(f"\nExpected column count: {expected_cols}. Actual: {len(final_df.columns)}")
-
-print(f"\nSaving final combined DataFrame to '{FINAL_DATASET_FILE}'...")
-final_df.write_parquet(FINAL_DATASET_FILE)
-print("Save complete. This file is now ready for your modeling pipeline.")
+    print(f"\n  Saving final dataset to '{FINAL_DATASET_FILE}'...")
+    final_df.write_parquet(FINAL_DATASET_FILE)
+    print("  Save complete.")
