@@ -9,10 +9,11 @@ from scipy.spatial.transform import Rotation as R
 # =====================================================================================
 # CONFIGURATION
 # =====================================================================================
-RAW_DIR = Path("input/cmi-detect-behavior-with-sensor-data")
+INPUT_DIR = Path('Output')
 EXPORT_DIR = Path("output")
+CLEAN_DATA_FILE = INPUT_DIR / "cleaned_base_train_data.parquet"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
-SAMPLING_RATE_HZ = 100 # Assuming 100Hz based on previous analysis
+SAMPLING_RATE_HZ = 200 
 
 # =====================================================================================
 # HELPER FUNCTIONS (for base physics features)
@@ -57,13 +58,8 @@ def calculate_angular_velocity(rot_df: pl.DataFrame, sampling_rate_hz: int) -> n
 if __name__ == "__main__":
     print("▶ Starting IMU Cross-Modal Feature Engineering...")
 
-    # --- Step 1: Load Raw Data ---
-    print("  Loading raw data...")
-    df = pl.read_csv(RAW_DIR / "train.csv")
-    
-    # Add a sequence counter if it doesn't exist
-    if 'sequence_counter' not in df.columns:
-        df = df.with_columns(pl.int_range(0, pl.count()).over('sequence_id').alias('sequence_counter'))
+    print(f"  Loading clean base data from '{CLEAN_DATA_FILE}'...")
+    df = pl.read_parquet(CLEAN_DATA_FILE)
 
     # --- Step 2: Generate Base Physics Features ---
     print("  Generating base physics features (linear acc, angular vel)...")

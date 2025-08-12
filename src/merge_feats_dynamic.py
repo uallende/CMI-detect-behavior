@@ -10,9 +10,11 @@ import numpy as np
 # =====================================================================================
 # CONFIGURATION
 # =====================================================================================
-RAW_DIR = Path("input/cmi-detect-behavior-with-sensor-data")
-FEATURE_DIR = Path("output")
-FEATURE_DIR.mkdir(parents=True, exist_ok=True)
+INPUT_DIR = Path("output")
+EXPORT_DIR = Path("output")
+EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+CLEAN_DATA_FILE = INPUT_DIR / "cleaned_base_train_data.parquet"
 
 # =====================================================================================
 # CORE MERGING FUNCTION (This remains unchanged)
@@ -21,7 +23,7 @@ def merge_feature_sets(base_df: pl.DataFrame, feature_file_paths: List[Path]) ->
     """
     Iteratively merges a list of feature DataFrames onto a base DataFrame.
     """
-    print("▶ Starting merge process...")
+    print(" Starting merge process...")
     final_df = base_df
     key_cols = ['sequence_id', 'sequence_counter']
 

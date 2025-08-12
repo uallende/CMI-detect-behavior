@@ -9,10 +9,11 @@ from scipy.spatial.transform import Rotation as R
 # =====================================================================================
 # CONFIGURATION
 # =====================================================================================
-RAW_DIR = Path("input/cmi-detect-behavior-with-sensor-data")
+INPUT_DIR = Path('Output')
 EXPORT_DIR = Path("output")
+CLEAN_DATA_FILE = INPUT_DIR / "cleaned_base_train_data.parquet"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
-SAMPLING_RATE_HZ = 100 # Assuming 100Hz based on previous analysis
+SAMPLING_RATE_HZ = 200 
 
 # =====================================================================================
 # HELPER FUNCTIONS (for base physics features)
@@ -59,20 +60,15 @@ def calculate_angular_velocity(rot_df: pl.DataFrame, sampling_rate_hz: int) -> n
 if __name__ == "__main__":
     print("▶ Starting IMU Rolling Stats Feature Engineering...")
 
-    # --- Step 1: Load Raw Data ---
-    print("  Loading raw data...")
-    df = pl.read_csv(RAW_DIR / "train.csv")
+    print(f"  Loading clean base data from '{CLEAN_DATA_FILE}'...")
+    df = pl.read_parquet(CLEAN_DATA_FILE)
     
     # Add a sequence counter if it doesn't exist
     if 'sequence_counter' not in df.columns:
         df = df.with_columns(pl.int_range(0, pl.count()).over('sequence_id').alias('sequence_counter'))
 
-    # --- Step 2: Generate Base Physics Features ---
-    # We need to generate the base signals before we can calculate rolling stats on them.
     print("  Generating base physics features (linear acc, angular vel)...")
     
-    # Create a temporary DataFrame to hold the new features
-    # This is done by iterating through groups, which is necessary for the SciPy functions
     grouped = df.partition_by("sequence_id", maintain_order=True)
     all_feature_dfs = []
     for group in grouped:
@@ -104,10 +100,8 @@ if __name__ == "__main__":
         (pl.col("angular_vel_x")**2 + pl.col("angular_vel_y")**2 + pl.col("angular_vel_z")**2).sqrt().alias("angular_vel_mag"),
     ])
     
-    # --- Step 3: Calculate Rolling Window Statistics ---
     print("  Calculating rolling window statistics...")
     
-    # Define window sizes (e.g., 100ms, 200ms, and 500ms windows at 100Hz)
     window_sizes = [10, 50, 100] 
     
     cols_to_roll = [

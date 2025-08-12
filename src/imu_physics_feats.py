@@ -10,9 +10,11 @@ import gc
 # =====================================================================================
 # CONFIGURATION
 # =====================================================================================
-RAW_DIR = Path("input/cmi-detect-behavior-with-sensor-data")
+INPUT_DIR = Path("output")
 EXPORT_DIR = Path("output")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+CLEAN_DATA_FILE = INPUT_DIR / "cleaned_base_train_data.parquet"
 SAMPLING_RATE_HZ = 200 
 
 # =====================================================================================
@@ -142,23 +144,15 @@ def add_all_imu_features_polars(df: pl.DataFrame, sampling_rate_hz: int) -> pl.D
 if __name__ == "__main__":
     print("▶ Starting IMU Physics-Based Feature Engineering Script...")
 
-    # --- Load Data ---
-    print("  Loading raw data...")
-    df = pl.read_csv(RAW_DIR / "train.csv")
-    
-    # Ensure a sequence counter exists for robust joining
-    if 'sequence_counter' not in df.columns:
-        df = df.with_columns(pl.int_range(0, pl.count()).over('sequence_id').alias('sequence_counter'))
+    print(f"  Loading clean base data from '{CLEAN_DATA_FILE}'...")
+    df = pl.read_parquet(CLEAN_DATA_FILE)
 
-    # --- Process Features ---
     print("  Calculating all IMU features...")
     processed_df = add_all_imu_features_polars(df, SAMPLING_RATE_HZ)
 
-    # --- Select Final Columns for Output ---
     print("  Selecting final columns for output...")
     key_cols = ['sequence_id', 'sequence_counter']
     
-    # Define the list of all newly engineered features to keep
     imu_engineered_cols = [
         'acc_mag', 'acc_mag_jerk', 'linear_acc_x', 'linear_acc_y', 'linear_acc_z',
         'angular_vel_x', 'angular_vel_y', 'angular_vel_z', 'angular_accel_x',
@@ -166,12 +160,10 @@ if __name__ == "__main__":
         'grav_orient_z', 'linear_acc_mag', 'angular_vel_mag', 'angular_accel_mag',
         'linear_acc_mag_jerk', 'angular_vel_mag_jerk', 'angular_accel_mag_jerk'
     ]
-    # Remove duplicates while preserving order
     imu_engineered_cols = list(dict.fromkeys(imu_engineered_cols))
 
     final_df = processed_df.select(key_cols + imu_engineered_cols)
     
-    # --- Verification and Saving ---
     print("\nProcessing complete.")
     print("Final DataFrame Info:")
     print(final_df.head())
