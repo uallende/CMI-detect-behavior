@@ -6,9 +6,9 @@ from scipy.spatial.transform import Rotation as R
 import gc # Import gc for memory management
 
 # --- Configuration ---
-# RAW_DIR = Path("input/cmi-detect-behavior-with-sensor-data")
-RAW_DIR = Path("/kaggle/input/cmi-detect-behavior-with-sensor-data")
-EXPORT_DIR = Path("./")
+RAW_DIR = Path("input/cmi-detect-behavior-with-sensor-data")
+# RAW_DIR = Path("/kaggle/input/cmi-detect-behavior-with-sensor-data")
+EXPORT_DIR = Path("output")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True) # Ensure export directory exists
 
 def remove_gravity_from_acc(acc_data, rot_data):
@@ -128,7 +128,7 @@ print("\nFinal DataFrame Head:")
 print(final_df.head())
 
 # Save the final DataFrame to a memory-efficient Parquet file
-output_path = EXPORT_DIR / "final_processed_train_data.parquet"
+output_path = EXPORT_DIR / "kaggle_0.8_feats.parquet"
 print(f"\nSaving final DataFrame to '{output_path}'...")
 final_df.to_parquet(output_path)
 print("Save complete.")

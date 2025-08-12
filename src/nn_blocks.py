@@ -179,6 +179,20 @@ def unet_se_cnn(x, unet_depth=3, base_filters=64, kernel_size=3, drop=0.3):
         x = res_se_cnn_decoder_block(x, filters, kernel_size, drop=drop, skip_connection=skip)
     
     return x
+
+def res_se_cnn_wave_gru_block(x, filters, kernel_size, dilation_depth, dropout_rate=0.3):
+    x1 = residual_se_cnn_block(x, filters, kernel_size)
+    x2 = wave_block(x, filters, kernel_size, dilation_depth)
+    x2 = MaxPooling1D(2)(x2)
+    
+    x = Concatenate()([x1, x2])
+    skip = x
+    gru_params = filters*2
+
+    x = Bidirectional(GRU(gru_params, return_sequences=True))(x)
+    x = Dropout(dropout_rate)(x) 
+    x = Dense(gru_params, activation="relu")(x)
+    return Add()([x, skip])
         
 class GatedMixupGenerator(Sequence):
     def __init__(self, X, y, gate_targets, batch_size, imu_dim, class_weight=None, alpha=0.2, masking_prob=0.0):
@@ -236,6 +250,16 @@ def squeeze_last_axis(x):
 def expand_last_axis(x):
     return tf.expand_dims(x, axis=-1)
 
+def tof_block_2(tof_inputs, wd=1e-4):
+    # TOF/Thermal lighter branch
+    x2 = tf.keras.layers.Conv1D(64, 3, padding='same', use_bias=False, kernel_regularizer=tf.keras.regularizers.l2(wd))(tof_inputs)
+    x2 = tf.keras.layers.BatchNormalization()(x2); x2 = tf.keras.layers.Activation('relu')(x2)
+    x2 = tf.keras.layers.MaxPooling1D(2)(x2); x2 = tf.keras.layers.Dropout(0.2)(x2)
+    x2 = tf.keras.layers.Conv1D(128, 3, padding='same', use_bias=False, kernel_regularizer=tf.keras.regularizers.l2(wd))(x2)
+    x2 = tf.keras.layers.BatchNormalization()(x2); x2 = tf.keras.layers.Activation('relu')(x2)
+    x2 = tf.keras.layers.MaxPooling1D(2)(x2); x2 = tf.keras.layers.Dropout(0.2)(x2)
+    return x2
+
 def tof_block(tof_inputs, wd=1e-4):
     x2_base = Conv1D(64, 3, padding='same', use_bias=False, kernel_regularizer=l2(wd))(tof_inputs)
     x2_base = BatchNormalization()(x2_base); x2_base = Activation('relu')(x2_base)
@@ -275,6 +299,46 @@ def features_processing(x1, x2, wd=1e-4):
         x = Dropout(drop)(x)
 
     return x
+
+def kaggle_082(dataset, imu_dim, wd=1e-4):
+    sample_batch = next(iter(dataset))
+    input_shape = sample_batch[0].shape[1:]
+    inp = tf.keras.layers.Input(shape=input_shape)
+    imu = tf.keras.layers.Lambda(lambda t: t[:, :, :imu_dim])(inp)
+    tof = tf.keras.layers.Lambda(lambda t: t[:, :, imu_dim:])(inp)
+
+    # IMU deep branch
+    x1 = residual_se_cnn_block(imu, 64, 3, drop=0.1, wd=wd)
+    x1 = residual_se_cnn_block(x1, 128, 5, drop=0.1, wd=wd)
+
+    # TOF/Thermal lighter branch
+    x2 = tf.keras.layers.Conv1D(64, 3, padding='same', use_bias=False, kernel_regularizer=tf.keras.regularizers.l2(wd))(tof)
+    x2 = tf.keras.layers.BatchNormalization()(x2); x2 = tf.keras.layers.Activation('relu')(x2)
+    x2 = tf.keras.layers.MaxPooling1D(2)(x2); x2 = tf.keras.layers.Dropout(0.2)(x2)
+    x2 = tf.keras.layers.Conv1D(128, 3, padding='same', use_bias=False, kernel_regularizer=tf.keras.regularizers.l2(wd))(x2)
+    x2 = tf.keras.layers.BatchNormalization()(x2); x2 = tf.keras.layers.Activation('relu')(x2)
+    x2 = tf.keras.layers.MaxPooling1D(2)(x2); x2 = tf.keras.layers.Dropout(0.2)(x2)
+
+    merged = tf.keras.layers.Concatenate()([x1, x2])
+
+    xa = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True, kernel_regularizer=tf.keras.regularizers.l2(wd)))(merged)
+    xb = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(128, return_sequences=True, kernel_regularizer=tf.keras.regularizers.l2(wd)))(merged)
+    xc = tf.keras.layers.GaussianNoise(0.09)(merged)
+    xc = tf.keras.layers.Dense(16, activation='elu')(xc)
+    
+    x = tf.keras.layers.Concatenate()([xa, xb, xc])
+    x = tf.keras.layers.Dropout(0.4)(x)
+    x = attention_layer(x)
+
+    for units, drop in [(256, 0.5), (128, 0.3)]:
+        x = tf.keras.layers.Dense(units, use_bias=False, kernel_regularizer=tf.keras.regularizers.l2(wd))(x)
+        x = tf.keras.layers.BatchNormalization()(x); x = tf.keras.layers.Activation('relu')(x)
+        x = tf.keras.layers.Dropout(drop)(x)
+
+    main_out = tf.keras.layers.Dense(18, activation="softmax", name="main_output")(x)
+    gate_out = tf.keras.layers.Dense(1, activation="sigmoid", name="tof_gate")(x) # Renamed layer
+    
+    return tf.keras.models.Model(inputs=inp, outputs={"main_output": main_out, "tof_gate": gate_out})
 
 
 # SOME TESTS
@@ -326,20 +390,6 @@ def features_processing(x1, x2, wd=1e-4):
 #         x = res_se_cnn_decoder_block(x, filters, kernel_size, drop=drop, skip_connection=skip)
     
 #     return x    
-
-# def res_se_cnn_wave_gru_block(x, filters, kernel_size, dilation_depth, dropout_rate=0.3):
-#     x1 = residual_se_cnn_block(x, filters, kernel_size)
-#     x2 = wave_block(x, filters, kernel_size, dilation_depth)
-#     x2 = MaxPooling1D(2)(x2)
-    
-#     x = Concatenate()([x1, x2])
-#     skip = x
-#     gru_params = filters*2
-
-#     x = Bidirectional(GRU(gru_params, return_sequences=True))(x)
-#     x = Dropout(dropout_rate)(x) 
-#     x = Dense(gru_params, activation="relu")(x)
-#     return Add()([x, skip])
 
 # def res_se_cnn_wave_lstm_block(x, filters, kernel_size, dilation_depth, dropout_rate=0.3):
 #     x1 = residual_se_cnn_block(x, filters, kernel_size)

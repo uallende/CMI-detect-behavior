@@ -32,7 +32,9 @@ def create_model_definition(dataset, imu_dim, wd=1e-4):
 
 
 Per-fold Accuracies: [0.7546614327772326, 0.7507360157016683, 0.767909715407262, 0.7741777123220422]
-Mean Accuracy: 0.7619 ± 0.0095
+Mean Accuracy: 0.7619 ± 0.0095 
+
+0.795 in PLB
 
 In Kaggle
 === Cross-validation Summary ===
@@ -40,11 +42,36 @@ Per-fold Accuracies: [0.7419038272816487, 0.7708537782139352, 0.7737978410206084
 Mean Accuracy: 0.7703 ± 0.0188
 
 
+=== new tof and imu features ===
+Fold 4 Accuracy: 0.7727
+Per-fold Accuracies: [0.7649656526005888, 0.7850834151128557, 0.7443572129538764, 0.7727049582719686]
+Mean Accuracy: 0.7668 ± 0.0148
 
 
+2 unet blocks 128 base filters
+Per-fold Accuracies: [0.7998037291462218, 0.7787046123650638, 0.788027477919529, 0.7677957781050565]
+Mean Accuracy: 0.7836 ± 0.0118
 
 
+0.8 notebook featuresand architecture
+Per-fold Accuracies: [0.7595682041216879, 0.7340529931305201, 0.7526987242394504, 0.7550319096710849]
+Mean Accuracy: 0.7503 ± 0.0097
 
+0.8 notebook my tof and imu features sand architecture
+Per-fold Accuracies: [0.7522080471050049, 0.7713444553483808, 0.7487733071638861, 0.7722140402552774]
+Mean Accuracy: 0.7611 ± 0.0107
+
+=============================================================
+    xa = unet_se_cnn(imu, 3, base_filters=128, kernel_size=3) # 64,128
+    xa = unet_se_cnn(xa, 3, base_filters=128, kernel_size=5)
+    # xb = tf.keras.layers.MaxPool1D(2)(xb) # 64,128
+    # x1 = tf.keras.layers.Concatenate()([xa, xb])
+    # x1 = tf.keras.layers.Conv1D(filters=128, kernel_size=3, strides=2, padding='same', activation='relu')(x1)
+
+    # input_shape=[(None, 64, 256), (None, 32, 128)
+    x2 = tof_block_2(tof, wd)
+Per-fold Accuracies: [0.7723258096172718, 0.7644749754661433, 0.7811579980372915, 0.7673048600883653]
+Mean Accuracy: 0.7713 ± 0.0063
 
 
 
@@ -124,3 +151,4 @@ Mean Accuracy: 0.3912 ± 0.0232
 2 blocks or 4 blocks worse
 Per-fold Accuracies: [0.4216417910447761, 0.44402985074626866, 0.29213483146067415, 0.3895131086142322, 0.3258426966292135]
 Mean Accuracy: 0.3746 ± 0.0573
+
