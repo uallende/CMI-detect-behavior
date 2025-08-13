@@ -369,27 +369,27 @@ def kaggle_082(dataset, imu_dim, wd=1e-4):
 #     out = Dense(n_classes, activation='softmax', kernel_regularizer=l2(wd), name="main_output")(x)
 #     return Model(inp, out)
 
-# def unet_se_cnn_bilstm(x, base_filters=32, kernel_size=3, drop=0.3):
-#     filters = base_filters
-#     skips = []
+def unet_se_cnn_bilstm(x, base_filters=32, kernel_size=3, drop=0.3):
+    filters = base_filters
+    skips = []
     
-#     # Encoder
-#     for _ in range(3):
-#         x = residual_se_cnn_block(x, filters, kernel_size, drop=drop)
-#         skips.append(x)
-#         filters *= 2
+    # Encoder
+    for _ in range(3):
+        x = residual_se_cnn_block(x, filters, kernel_size, drop=drop)
+        skips.append(x)
+        filters *= 2
     
-#     # Bottleneck
-#     c_shape = x.shape[-1]
-#     x = Bidirectional(LSTM(c_shape // 2, return_sequences=True))(x)
-#     x = Dense(c_shape)(x)
+    # Bottleneck
+    c_shape = x.shape[-1] * 2
+    x = Bidirectional(LSTM(c_shape, return_sequences=True))(x)
+    x = Dense(c_shape)(x)
     
-#     # Decoder 
-#     for skip in reversed(skips):
-#         filters //= 2
-#         x = res_se_cnn_decoder_block(x, filters, kernel_size, drop=drop, skip_connection=skip)
+    # Decoder 
+    for skip in reversed(skips):
+        filters //= 2
+        x = res_se_cnn_decoder_block(x, filters, kernel_size, drop=drop, skip_connection=skip)
     
-#     return x    
+    return x    
 
 # def res_se_cnn_wave_lstm_block(x, filters, kernel_size, dilation_depth, dropout_rate=0.3):
 #     x1 = residual_se_cnn_block(x, filters, kernel_size)

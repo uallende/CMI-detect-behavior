@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation as R
 # =====================================================================================
 # CONFIGURATION
 # =====================================================================================
-INPUT_DIR = Path('Output')
+INPUT_DIR = Path('output')
 EXPORT_DIR = Path("output")
 CLEAN_DATA_FILE = INPUT_DIR / "cleaned_base_train_data.parquet"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)

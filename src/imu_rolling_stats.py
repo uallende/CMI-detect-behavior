@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation as R
 # =====================================================================================
 # CONFIGURATION
 # =====================================================================================
-INPUT_DIR = Path('Output')
+INPUT_DIR = Path('output')
 EXPORT_DIR = Path("output")
 CLEAN_DATA_FILE = INPUT_DIR / "cleaned_base_train_data.parquet"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -18,9 +18,6 @@ SAMPLING_RATE_HZ = 200
 # =====================================================================================
 # HELPER FUNCTIONS (for base physics features)
 # =====================================================================================
-# (Your functions: remove_gravity_polars, calculate_angular_velocity, etc. go here)
-# ... (I will include them here for a complete, runnable script)
-
 def remove_gravity_polars(acc_df: pl.DataFrame, rot_df: pl.DataFrame) -> np.ndarray:
     acc_values = acc_df.select(['acc_x', 'acc_y', 'acc_z']).to_numpy()
     quat_values = rot_df.select(['rot_x', 'rot_y', 'rot_z', 'rot_w']).to_numpy()
@@ -59,11 +56,9 @@ def calculate_angular_velocity(rot_df: pl.DataFrame, sampling_rate_hz: int) -> n
 # =====================================================================================
 if __name__ == "__main__":
     print("▶ Starting IMU Rolling Stats Feature Engineering...")
-
     print(f"  Loading clean base data from '{CLEAN_DATA_FILE}'...")
     df = pl.read_parquet(CLEAN_DATA_FILE)
     
-    # Add a sequence counter if it doesn't exist
     if 'sequence_counter' not in df.columns:
         df = df.with_columns(pl.int_range(0, pl.count()).over('sequence_id').alias('sequence_counter'))
 
@@ -94,7 +89,6 @@ if __name__ == "__main__":
     features_to_add = pl.concat(all_feature_dfs)
     df = df.join(features_to_add, on=["sequence_id", "sequence_counter"], how="left")
     
-    # Calculate magnitudes of the base signals
     df = df.with_columns([
         (pl.col("linear_acc_x")**2 + pl.col("linear_acc_y")**2 + pl.col("linear_acc_z")**2).sqrt().alias("linear_acc_mag"),
         (pl.col("angular_vel_x")**2 + pl.col("angular_vel_y")**2 + pl.col("angular_vel_z")**2).sqrt().alias("angular_vel_mag"),
@@ -102,7 +96,7 @@ if __name__ == "__main__":
     
     print("  Calculating rolling window statistics...")
     
-    window_sizes = [10, 50, 100] 
+    window_sizes = [10] #, 50, 100] 
     
     cols_to_roll = [
         "linear_acc_mag", 
@@ -122,9 +116,20 @@ if __name__ == "__main__":
 
     df = df.with_columns(rolling_exprs)
     
+    # --- THIS IS THE FIX ---
+    # Impute the nulls created by the rolling_std calculation at the start of each sequence.
+    # We will backfill from the first valid calculation within each group.
+    rolling_feature_cols = [expr.meta.output_name() for expr in rolling_exprs]
+    df = df.with_columns(
+        pl.col(rolling_feature_cols).backward_fill().over("sequence_id")
+    )
+    # As a final safety net, fill any remaining nulls with 0 (e.g., for very short sequences)
+    df = df.with_columns(
+        pl.col(rolling_feature_cols).fill_null(0)
+    )
+    
     # --- Step 4: Select and Save Output ---
     key_cols = ['sequence_id', 'sequence_counter']
-    rolling_feature_cols = [expr.meta.output_name() for expr in rolling_exprs]
     
     final_df = df.select(key_cols + rolling_feature_cols)
     

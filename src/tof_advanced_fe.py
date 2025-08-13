@@ -41,7 +41,10 @@ def process_tof_features(df: pl.DataFrame) -> pl.DataFrame:
         ])
 
     final_feature_cols = tof_aggregated_cols_template
-    metadata_cols = ['sequence_id', 'subject', 'gesture', 'gesture_int']
+    
+    # --- THIS IS THE FIX ---
+    # Ensure 'sequence_counter' is always included in the final selection.
+    metadata_cols = ['sequence_id', 'sequence_counter', 'subject', 'gesture', 'gesture_int']
 
     print(f"  Total {len(final_feature_cols)} ToF statistical features will be engineered.")
     np.save(EXPORT_DIR / "tof_feature_cols_advanced.npy", np.array(final_feature_cols))
@@ -75,13 +78,10 @@ def process_tof_features(df: pl.DataFrame) -> pl.DataFrame:
 
     df_featured = df.with_columns(feature_expressions)
     
-    # --- FIX: Separate imputation by data type ---
     float_cols = [c for c in final_feature_cols if c.endswith(('_mean', '_std', '_min', '_max', '_median', '_diff_mean', '_mean_decay', '_skew', '_kurtosis', '_centroid_x', '_centroid_y'))]
     int_cols = [c for c in final_feature_cols if c.endswith('_active_pixels')]
 
-    # Apply full imputation chain to float columns
     float_imputation = pl.col(float_cols).replace([np.inf, -np.inf], None).fill_nan(None).forward_fill().backward_fill().fill_null(0).over("sequence_id")
-    # Apply simpler imputation to integer columns (they can't be inf/nan)
     int_imputation = pl.col(int_cols).forward_fill().backward_fill().fill_null(0).over("sequence_id")
 
     final_df_imputed = df_featured.with_columns(float_imputation, int_imputation)
@@ -99,6 +99,11 @@ if __name__ == "__main__":
     df = pl.read_csv(RAW_DIR / "train.csv")
     train_dem_df = pl.read_csv(RAW_DIR / "train_demographics.csv")
     df = df.join(train_dem_df, on='subject', how='left')
+    
+    # Ensure sequence_counter exists from the start
+    if 'sequence_counter' not in df.columns:
+        df = df.with_columns(pl.int_range(0, pl.count()).over('sequence_id').alias('sequence_counter'))
+
     le = LabelEncoder()
     gesture_encoded = le.fit_transform(df.get_column('gesture'))
     df = df.with_columns(pl.Series("gesture_int", gesture_encoded))
