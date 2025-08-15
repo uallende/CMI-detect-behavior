@@ -160,7 +160,8 @@ def train_model(
     )
 
     early_stopping = EarlyStopping(
-        monitor='val_loss',
+        monitor='val_main_output_accuracy',
+        mode='max',
         patience=20,
         restore_best_weights=True
     )

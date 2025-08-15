@@ -282,8 +282,33 @@ def attention_layer(inputs):
     context = Lambda(time_sum)(context)
     return context    
 
-def features_processing(x1, x2, wd=1e-4):
+def features_processing_old(x1, x2, wd=1e-4):
     merged = Concatenate()([x1, x2])
+    xa = Bidirectional(LSTM(128, return_sequences=True, kernel_regularizer=l2(wd)))(merged)
+    xb = Bidirectional(GRU(128, return_sequences=True, kernel_regularizer=l2(wd)))(merged)
+    xc = GaussianNoise(0.09)(merged)
+    xc = Dense(16, activation='elu')(xc)
+    
+    x = Concatenate()([xa, xb, xc])
+    x = Dropout(0.4)(x)
+    x = attention_layer(x)
+
+    for units, drop in [(256, 0.5), (128, 0.3)]:
+        x = Dense(units, use_bias=False, kernel_regularizer=l2(wd))(x)
+        x = BatchNormalization()(x); x = Activation('relu')(x)
+        x = Dropout(drop)(x)
+    return x
+
+def features_processing(x1, x2, wd=1e-4):
+    # --- THIS IS THE FIX ---
+    # Match the time dimensions of the two input tensors before concatenating.
+    # This will crop the longer tensor to match the shorter one.
+    x1_matched, x2_matched = match_time_steps(x1, x2)
+    
+    # Now, concatenation will work correctly.
+    merged = Concatenate()([x1_matched, x2_matched])
+    
+    # The rest of the function remains the same
     xa = Bidirectional(LSTM(128, return_sequences=True, kernel_regularizer=l2(wd)))(merged)
     xb = Bidirectional(GRU(128, return_sequences=True, kernel_regularizer=l2(wd)))(merged)
     xc = GaussianNoise(0.09)(merged)
@@ -339,6 +364,27 @@ def kaggle_082(dataset, imu_dim, wd=1e-4):
     gate_out = tf.keras.layers.Dense(1, activation="sigmoid", name="tof_gate")(x) # Renamed layer
     
     return tf.keras.models.Model(inputs=inp, outputs={"main_output": main_out, "tof_gate": gate_out})
+
+class TransformerBlock(Layer):
+    def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
+        super().__init__()
+        self.att = MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)
+        self.ffn = Sequential([
+            Dense(ff_dim, activation="gelu"),
+            Dense(embed_dim),
+        ])
+        self.layernorm1 = LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = LayerNormalization(epsilon=1e-6)
+        self.dropout1 = Dropout(rate)
+        self.dropout2 = Dropout(rate)
+
+    def call(self, inputs, training=None):  
+        attn_output = self.att(inputs, inputs, training=training)  
+        attn_output = self.dropout1(attn_output, training=training)
+        out1 = self.layernorm1(inputs + attn_output)
+        ffn_output = self.ffn(out1)
+        ffn_output = self.dropout2(ffn_output, training=training)
+        return self.layernorm2(out1 + ffn_output)
 
 
 # SOME TESTS
@@ -405,26 +451,7 @@ def unet_se_cnn_bilstm(x, base_filters=32, kernel_size=3, drop=0.3):
 #     x = Dense(lstm_params, activation="relu")(x)
 #     return Add()([x, skip])
 
-# class TransformerBlock(Layer):
-#     def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
-#         super().__init__()
-#         self.att = MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)
-#         self.ffn = Sequential([
-#             Dense(ff_dim, activation="gelu"),
-#             Dense(embed_dim),
-#         ])
-#         self.layernorm1 = LayerNormalization(epsilon=1e-6)
-#         self.layernorm2 = LayerNormalization(epsilon=1e-6)
-#         self.dropout1 = Dropout(rate)
-#         self.dropout2 = Dropout(rate)
 
-#     def call(self, inputs, training=None):  
-#         attn_output = self.att(inputs, inputs, training=training)  
-#         attn_output = self.dropout1(attn_output, training=training)
-#         out1 = self.layernorm1(inputs + attn_output)
-#         ffn_output = self.ffn(out1)
-#         ffn_output = self.dropout2(ffn_output, training=training)
-#         return self.layernorm2(out1 + ffn_output)
 
 # class GatedMixupGenerator(Sequence):
 #     def __init__(self, X, y, batch_size, imu_dim, class_weight=None, alpha=0.2, masking_prob=0.0):
