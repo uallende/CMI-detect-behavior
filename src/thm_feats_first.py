@@ -7,7 +7,9 @@ import gc
 # =====================================================================================
 # CONFIGURATION
 # =====================================================================================
+# Directory where the CLEAN base data is stored
 INPUT_DIR = Path("output")
+# Directory where the new feature set will be saved
 EXPORT_DIR = Path("output")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -30,7 +32,6 @@ if __name__ == "__main__":
         exit()
 
     # --- Step 2: Define Thermal Columns ---
-    # Identify the raw thermal columns to be used for aggregation
     thm_cols = [c for c in df.columns if c.startswith('thm_')]
     
     if not thm_cols:
@@ -42,22 +43,21 @@ if __name__ == "__main__":
     # --- Step 3: Calculate Statistical Features ---
     print("  Calculating statistical features across thermal sensors...")
     
-    # Use Polars' efficient horizontal aggregations for high performance
+    # --- THIS IS THE CORRECTED BLOCK ---
     thermal_feature_exprs = [
         pl.mean_horizontal(pl.col(thm_cols)).alias("thm_mean"),
-        pl.std_horizontal(pl.col(thm_cols)).alias("thm_std"),
+        # Use the correct idiom for horizontal standard deviation
+        pl.concat_list(pl.col(thm_cols)).list.std().alias("thm_std"),
         pl.max_horizontal(pl.col(thm_cols)).alias("thm_max"),
         pl.min_horizontal(pl.col(thm_cols)).alias("thm_min"),
     ]
     
-    # Add the new feature columns to the DataFrame
     df = df.with_columns(thermal_feature_exprs)
 
     # --- Step 4: Select and Save Output ---
     print("  Selecting final columns for output...")
     key_cols = ['sequence_id', 'sequence_counter']
     
-    # Define the list of all newly engineered features to keep
     thermal_engineered_cols = [
         "thm_mean",
         "thm_std",
@@ -65,7 +65,6 @@ if __name__ == "__main__":
         "thm_min",
     ]
 
-    # Ensure key columns exist before selecting
     if not all(key in df.columns for key in key_cols):
         print(f"  ERROR: Input file is missing required key columns: {key_cols}. Exiting.")
         exit()

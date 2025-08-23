@@ -300,9 +300,7 @@ def features_processing_old(x1, x2, wd=1e-4):
     return x
 
 def features_processing(x1, x2, wd=1e-4):
-    # --- THIS IS THE FIX ---
-    # Match the time dimensions of the two input tensors before concatenating.
-    # This will crop the longer tensor to match the shorter one.
+    # crop the longer tensor to match the shorter one.
     x1_matched, x2_matched = match_time_steps(x1, x2)
     
     # Now, concatenation will work correctly.

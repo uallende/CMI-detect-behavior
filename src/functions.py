@@ -135,7 +135,7 @@ def train_model(
     model,
     train_dataset,
     val_dataset,
-    epochs=50,
+    epochs=150,
     initial_learning_rate=1e-3, # The starting LR for the schedule
     weight_decay=1e-4           # The strength of the L2 regularization
 ):
@@ -181,12 +181,13 @@ def train_model(
         )
 
     # --- 5. Fit the Model ---
-    model.fit(
+    history = model.fit(
         train_dataset,
         validation_data=val_dataset,
         epochs=epochs,
         callbacks=[early_stopping]
     )    
+    return history
 
 if __name__ == "__main__":
     print("done")    
