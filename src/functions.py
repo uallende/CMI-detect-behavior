@@ -69,17 +69,6 @@ def perform_target_encoding(train_df, val_df, target=TARGET):
     return train_df, val_df, le
 
 def create_sequence_dataset(df: pl.DataFrame, feature_cols: list, gate_df: pl.DataFrame):
-    """
-    Creates sequences from the DataFrame and aligns them with their labels and TOF gate targets.
-
-    Args:
-        df: The main DataFrame containing scaled feature data.
-        feature_cols: A list of column names to be used as features for the sequences.
-        gate_df: A DataFrame with ['sequence_id', 'has_tof'] mapping.
-
-    Returns:
-        A tuple of three NumPy arrays: (sequences, labels, gate_targets).
-    """
     sequences = []
     labels = []
     gate_targets = [] 
@@ -136,22 +125,23 @@ def train_model(
     train_dataset,
     val_dataset,
     epochs=150,
-    initial_learning_rate=1e-3, # The starting LR for the schedule
-    weight_decay=1e-4           # The strength of the L2 regularization
+    initial_learning_rate=1e-3,
+    weight_decay=1e-4,
+    extra_callbacks=None  # <-- MODIFICATION 1: Add new optional argument
 ):
-
+    # --- Learning Rate and Optimizer Setup (Unchanged) ---
     try:
         steps_per_epoch = len(train_dataset)
         total_decay_steps = steps_per_epoch * epochs
         print(f"LR Scheduler: {steps_per_epoch} steps per epoch, {total_decay_steps} total decay steps.")
     except TypeError:
-        total_decay_steps = 10000 # A reasonable fallback
+        total_decay_steps = 10000 
         print("Warning: Could not determine dataset length. Using default decay steps.")
 
     lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
         initial_learning_rate=initial_learning_rate,
         decay_steps=total_decay_steps,
-        alpha=0.0 # The minimum learning rate as a fraction of the initial one. 0.0 means it decays to zero.
+        alpha=0.0
     )
 
     optimizer = AdamW(
@@ -159,6 +149,7 @@ def train_model(
         weight_decay=weight_decay
     )
 
+    # --- Callback Definition (Unchanged) ---
     early_stopping = EarlyStopping(
         monitor='val_main_output_accuracy',
         mode='max',
@@ -166,26 +157,34 @@ def train_model(
         restore_best_weights=True
     )
 
-    # --- 4. Compile the Model ---
+    # --- MODIFICATION 2: Create a dynamic list of callbacks ---
+    # Start with the default callbacks you always want to use
+    callbacks = [early_stopping]
+    
+    # If any extra callbacks were provided, add them to the list
+    if extra_callbacks:
+        callbacks.extend(extra_callbacks)
+
+    # --- Compile the Model (Unchanged) ---
     model.compile(
         optimizer=optimizer,
         loss={
-        "main_output": CategoricalCrossentropy(label_smoothing=0.1),
-        "tof_gate": BinaryCrossentropy()
+            "main_output": CategoricalCrossentropy(label_smoothing=0.1),
+            "tof_gate": BinaryCrossentropy()
         },
         loss_weights={
             "main_output": 1.0,
-            "tof_gate": 0.2  # tune this
+            "tof_gate": 0.2
         },
         metrics={"main_output": "accuracy"}
-        )
+    )
 
-    # --- 5. Fit the Model ---
+    # --- Fit the Model ---
     history = model.fit(
         train_dataset,
         validation_data=val_dataset,
         epochs=epochs,
-        callbacks=[early_stopping]
+        callbacks=callbacks  # <-- MODIFICATION 3: Use the new dynamic list
     )    
     return history
 

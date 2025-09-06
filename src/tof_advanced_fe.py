@@ -42,8 +42,6 @@ def process_tof_features(df: pl.DataFrame) -> pl.DataFrame:
 
     final_feature_cols = tof_aggregated_cols_template
     
-    # --- THIS IS THE FIX ---
-    # Ensure 'sequence_counter' is always included in the final selection.
     metadata_cols = ['sequence_id', 'sequence_counter', 'subject', 'gesture', 'gesture_int']
 
     print(f"  Total {len(final_feature_cols)} ToF statistical features will be engineered.")
@@ -62,11 +60,11 @@ def process_tof_features(df: pl.DataFrame) -> pl.DataFrame:
             list_expr.list.std().alias(f'tof_{i}_std'),
             list_expr.list.min().alias(f'tof_{i}_min'),
             list_expr.list.max().alias(f'tof_{i}_max'),
-            list_expr.list.median().alias(f'tof_{i}_median'),
+            # list_expr.list.median().alias(f'tof_{i}_median'),
             list_expr.list.diff().list.mean().alias(f'tof_{i}_diff_mean'),
             list_expr.list.drop_nulls().list.len().alias(f'tof_{i}_active_pixels'),
-            list_expr.list.drop_nulls().map_elements(pl_skew, return_dtype=pl.Float64).alias(f'tof_{i}_skew'),
-            list_expr.list.drop_nulls().map_elements(pl_kurtosis, return_dtype=pl.Float64).alias(f'tof_{i}_kurtosis'),
+            # list_expr.list.drop_nulls().map_elements(pl_skew, return_dtype=pl.Float64).alias(f'tof_{i}_skew'),
+            # list_expr.list.drop_nulls().map_elements(pl_kurtosis, return_dtype=pl.Float64).alias(f'tof_{i}_kurtosis'),
         ])
         tof_data_exprs = [pl.when(pl.col(c) == -1).then(None).otherwise(pl.col(c)) for c in pixel_cols]
         feature_expressions.append(pl.sum_horizontal([(expr * weight).fill_null(0) for expr, weight in zip(tof_data_exprs, decay_weights)]).alias(f'tof_{i}_mean_decay'))

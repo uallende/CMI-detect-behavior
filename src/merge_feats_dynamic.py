@@ -20,20 +20,36 @@ CLEAN_DATA_FILE = INPUT_DIR / "cleaned_base_train_data.parquet"
 # CORE MERGING FUNCTION (This remains unchanged)
 # =====================================================================================
 def merge_feature_sets(base_df: pl.DataFrame, feature_file_paths: List[Path]) -> pl.DataFrame:
+
+    print("▶ Starting merge process...")
     final_df = base_df
     key_cols = ['sequence_id', 'sequence_counter']
+    
+    # Get the list of columns already in the base_df to avoid joining them again
     base_columns = set(base_df.columns)
 
     for f_path in feature_file_paths:
         print(f"  Loading and joining features from: {f_path.name}")
+        
         feature_df = pl.read_parquet(f_path)
         
-        # Select only the keys and the NEW features from the feature file
-        new_feature_cols = [col for col in feature_df.columns if col not in base_columns or col in key_cols]
+        if not all(key in feature_df.columns for key in key_cols):
+            raise ValueError(f"File {f_path.name} is missing required key columns: {key_cols}")
+            
+        new_feature_cols = [
+            col for col in feature_df.columns 
+            if col not in base_columns or col in key_cols
+        ]
+        
         feature_df_to_join = feature_df.select(new_feature_cols)
         
-        final_df = final_df.join(feature_df_to_join, on=key_cols, how='inner')
+        final_df = final_df.join(
+            feature_df_to_join,
+            on=key_cols,
+            how='inner'
+        )
         gc.collect()
+
     print("  Merge complete.")
     return final_df
 
